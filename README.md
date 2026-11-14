@@ -25,7 +25,7 @@ Open several windows, one per tablet, to see the views stay in sync:
 
 ## Scenario S2: staged heart alert (demo script)
 
-1. Demo controls: issue the heart screening alert. Lena's chest strap ECG has moved outside her own usual
+1. Demo controls: issue the heart screening alert. Lena's wearable ECG has moved outside her own usual
    range (with resting heart rate also outside its range). Lena sees a caution that says it is a screening
    signal, not a diagnosis; Sam gets a quiet advisory in his review list. Nobody else is told.
 2. Lena answers the quick check. Yes: 10-second countdown to a crew-wide alert (she can stop it, which wakes
@@ -40,11 +40,20 @@ Open several windows, one per tablet, to see the views stay in sync:
 6. Sam ends it with a reason and outcome (confirmed, false alarm, not yet known). Every tablet returns to
    normal, crew access to Lena's data closes and Lena sees what was shared, with whom, and when.
 
+### Where the readings come from
+
+Every crew member has a tablet. Continuous readings (ECG, resting heart rate, sleep) come from a wearable paired
+with it: a **smartwatch** or the CSA's **Bio-Monitor** smart shirt and headband (Carré Technologies, Montreal), which
+measures heart activity, blood pressure, breathing, skin temperature, blood oxygen and movement, can be worn
+during sleep and pairs with a tablet app (https://www.asc-csa.gc.ca/eng/sciences/bio-monitor.asp). Blood
+pressure (cuff), core temperature and blood sugar are entered as check-ins. Values in the demo are not
+Bio-Monitor data.
+
 ### What the heart alert is based on (`crew/heart.py`)
 
 - **No probabilities, warning windows or invented track records.** The alert is a detection against criteria.
 - **Screening rule (team design, to be tuned):** ST segment outside the person's own usual range on 3
-  consecutive 10-minute averages, plus resting heart rate outside its usual range. A chest strap is a screening
+  consecutive 10-minute averages, plus resting heart rate outside its usual range. A wearable ECG is a screening
   signal only.
 - **Confirming criterion (published):** new ST elevation of at least 1 mm in two contiguous leads on a 12-lead
   ECG (Fourth Universal Definition of Myocardial Infarction, Thygesen et al., Circulation 2018). Meeting it
@@ -121,3 +130,14 @@ All constants and their sources are in `radiation/config.py`.
 - NASA CCMC DONKI; NASA OSDR RadLab
 
 Crew member, prior career dose and mission day are fictional demo values. Not a medical device.
+
+## Canadian neutron data (CSA Radi-N / Radi-N2)
+
+`data/csa_radi-n2_iss.csv` holds the ISS neutron measurements the Canadian Space Agency released for the 2019
+Space Apps Challenge: 11 week-long bubble-detector sessions (Robert Thirsk 2009, Chris Hadfield 2012–13, David
+Saint-Jacques 2019), 192 µSv/day on average. `python -m radiation.csa` prints them.
+
+In the station setting the app uses them as the measured neutron dose: added to DosTel data when that is loaded
+(silicon detectors mostly miss neutrons), or used to set the neutron share of the published ISS total. The CSA's
+original download folder is offline; this copy comes from a 2019 participant's public mirror
+(github.com/rominacarabathampi/CanadianSpaceAppChallenge). Ask the CSA for an official copy and its licence.

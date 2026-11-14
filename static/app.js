@@ -51,6 +51,7 @@ const L = {
   zeitlin: { t: "Zeitlin et al. 2013, Science (Curiosity RAD, cruise)", u: "https://doi.org/10.1126/science.1235989" },
   hassler: { t: "Hassler et al. 2014, Science (Curiosity RAD, Mars surface)", u: "https://doi.org/10.1126/science.1244797" },
   zhang: { t: "Zhang et al. 2020, Science Advances (Chang'e 4, Moon surface)", u: "https://doi.org/10.1126/sciadv.aaz1334" },
+  bio: { t: "CSA: Bio-Monitor", u: "https://www.asc-csa.gc.ca/eng/sciences/bio-monitor.asp" },
   csa: { t: "CSA: Monitoring Radiation for Astronaut Health (2026)", u: "https://www.asc-csa.gc.ca/eng/news/articles/2026/2026-02-26-monitoring-radiation-astronaut-health.asp" },
 };
 const SRC = {
@@ -60,8 +61,9 @@ const SRC = {
   barger: { label: "Barger 2014", title: "Sleep in flight", body: "Astronauts slept about 6 hours on the ISS against 8.5 scheduled.", links: [L.barger] },
   trim: { label: "Trim 2023", title: "Blood sugar with inactivity", body: "In a 60-day bed rest study, daily blood sugar rose 6% and fasting insulin 40%.", links: [L.trim] },
   behav: { label: "NASA behavioural risk", title: "Behavioural conditions", body: "Isolation and confinement affect mood, sleep and decisions. NASA's risk page lists no monitoring tool.", links: [L.behav] },
+  bio: { label: "CSA Bio-Monitor", title: "Where the readings come from", body: "Every crew member has a tablet. Continuous readings come from a wearable paired with it: a smartwatch, or the CSA's Bio-Monitor, a smart shirt and headband (Carré Technologies, Montreal) that measure heart rate and electrical heart activity, blood pressure, breathing rate and volume, skin temperature, blood oxygen and movement. It can be worn during sleep and exercise and pairs with a tablet app. First used on the ISS by David Saint-Jacques after launching in December 2018. A smartwatch ECG is usually single-lead and taken on demand, so continuous ECG monitoring works best with the shirt. Values shown here are demo values, not Bio-Monitor data.", links: [L.bio] },
   demo: { label: "Demo values", simulated: true, title: "Demo values", body: "Values for a fictional crew member, shaped by the published in-flight changes cited on each indicator.", links: [] },
-  rule: { label: "Alert rule", simulated: true, title: "Screening alert rule (team design)", body: "Fires when the chest strap ECG's ST segment stays outside the person's own usual range on 3 consecutive 10-minute averages and resting heart rate is also outside its usual range. A design choice to be tuned with flight data; a chest strap is a screening signal, not diagnostic.", links: [] },
+  rule: { label: "Alert rule", simulated: true, title: "Screening alert rule (team design)", body: "Fires when the wearable ECG's ST segment stays outside the person's own usual range on 3 consecutive 10-minute averages and resting heart rate is also outside its usual range. A design choice to be tuned with flight data; a wearable ECG is a screening signal, not diagnostic.", links: [] },
   thygesen: { label: "Thygesen 2018", title: "ST-elevation criterion", body: "Fourth Universal Definition of Myocardial Infarction: new ST elevation at the J point of at least 1 mm in two contiguous leads (higher thresholds in leads V2 to V3), measured on a 12-lead ECG. Meeting it indicates possible myocardial infarction; diagnosis needs clinical assessment.", links: [{ t: "Thygesen et al. 2018, Circulation", u: "https://doi.org/10.1161/CIR.0000000000000617" }] },
   symptom: { label: "Quick check", title: "Reported symptom", body: "Chest discomfort, pressure or pain, as answered by the crew member in the quick check.", links: [] },
   labs: { label: "NASA OSDR", title: "Real astronaut lab results", body: "Inspiration4 crew member C001: blood count (OSD-569) and metabolic panel (OSD-575), with the testing lab's own normal ranges. Shown as an example lab history; not Lena's data.", links: [L.osdr569, L.osdr575] },
@@ -149,7 +151,7 @@ const NEXT = {
   hr: ["Rest for 10 minutes and let the strap take a new reading.", "Crew doctor (already told)"],
 };
 const CHANGED = {
-  ecg: "Your chest strap ECG shows an ST shift of +0.9 mm, outside your usual ±0.2 mm, rising over the last 6 hours.",
+  ecg: "Your wearable ECG shows an ST shift of +0.9 mm, outside your usual ±0.2 mm, rising over the last 6 hours.",
   hr: "Your resting heart rate is 68 bpm, above your usual 52–60, rising over the last 6 hours.",
 };
 
@@ -184,7 +186,7 @@ function renderNormal(S) {
   else if (S.emergency && S.emergency.patient === me) status = `<div class="status">${TAG.emergency}<b>Possible heart attack: help is coming</b></div>`;
   else if (heartOn) status = `<div class="status">${TAG.caution}<b>Possible heart problem: quick check needed</b></div>`;
   else if (S.spe_caution) status = `<div class="status">${TAG.caution}<b>Solar particle event: follow ground instructions</b></div>`;
-  else if (inds.some((i) => i.state === "missing" && i.missing === "sensor_off")) status = `<div class="status"><span class="ico">${ICON.dash}</span><div><b>Some readings are missing</b><br><small>Your watch is not sending data. Missing data is never counted as normal.</small></div></div>`;
+  else if (inds.some((i) => i.state === "missing" && i.missing === "sensor_off")) status = `<div class="status"><span class="ico">${ICON.dash}</span><div><b>Some readings are missing</b><br><small>Your wearable (Bio-Monitor shirt or watch) is not sending data. Missing data is never counted as normal.</small></div></div>`;
   else status = `<div class="status"><span class="ico">${ICON.ok}</span><div><b>Within your usual ranges</b><br><small>Data current at ${clock(S.now)}</small></div></div>`;
 
   const alerts = [];
@@ -270,7 +272,7 @@ function indDetail(i) {
   let changed, next, who;
   if (flag) { changed = CHANGED[i.key] || "Outside your usual range."; [next, who] = NEXT[i.key] || ["Recheck later.", "Crew doctor"]; }
   else if (miss && i.missing === "not_entered") { changed = "No reading entered today. This is not a warning."; next = "Enter today's reading."; who = "Only you"; }
-  else if (miss) { changed = "Your watch is not sending data. Missing data is never counted as normal."; next = "Put the watch on and check that it shows a connection."; who = "Only you"; }
+  else if (miss) { changed = "Your wearable (Bio-Monitor shirt or watch) is not sending data. Missing data is never counted as normal."; next = "Put the shirt or watch on and check that the tablet app shows a connection."; who = "Only you"; }
   else if (i.preventive) { changed = i.preventive; next = "A small preventive step, before this reaches a caution level."; who = "Only you"; }
   else { changed = "Within your usual range."; next = "No action needed. Next check: tomorrow morning."; who = "Nobody"; }
   return `<section class="panel stack">
@@ -285,7 +287,7 @@ function indDetail(i) {
     </div>
     <div class="two">
       <div><div class="label">Why it matters in space</div><div>${esc(i.why)} ${cite(src)}</div><small>NASA: ${esc(i.risk)}</small></div>
-      <div><div class="label">How it is measured</div><div>${esc(i.measured)}</div>${i.private ? `<small>Private: the crew doctor sees that you checked in, never your entries.</small>` : ""}</div>
+      <div><div class="label">How it is measured</div><div>${esc(i.measured)} ${i.measured_src ? cite(SRC[i.measured_src]) : ""}</div>${i.private ? `<small>Private: the crew doctor sees that you checked in, never your entries.</small>` : ""}</div>
     </div></section>`;
 }
 
@@ -331,11 +333,54 @@ function radDetail() {
       ? (r.storm.detected ? `extra dose measured here: <b>${r.storm.extraDose} mSv</b> (days above normal variation only, solar protons weighted 1.5).`
         : "no increase above normal day-to-day variation was measured at this location. Storms seen near Earth often miss Mars.")
       : `extra dose ${r.storm.extraDose} mSv from a simulated profile (no measured data for this date).`}</div>` : ""}
-    ${r.breakdown ? `<div class="chart"><div class="chart-head"><span>Today's dose by particle type (station)</span>${cite({ label: "CSA, 2026", title: "Neutron share of ISS radiation", body: "Neutrons make up about 30% of ISS radiation and need their own detectors, such as CSA's CANS.", links: [L.csa] })}</div>${splitBar(r.breakdown.neutrons_share)}</div>` : ""}
+    ${r.breakdown ? neutronCard(r.breakdown) : ""}
     <div class="two">
       <div><div class="label">What to do</div><ul style="margin:4px 0 0;padding-left:18px">${r.actions.map((a) => `<li>${esc(a.text)}</li>`).join("")}</ul></div>
       <div><div class="label">Why it matters in space</div><div>Space radiation passes through the hull and the body, raising lifetime cancer risk. Solar storms can add a large dose within hours.</div><small>NASA: ${esc(r.nasaRisk)}</small></div>
     </div></section>`;
+}
+
+const CSA_SRC = (b) => ({ label: "CSA Radi-N2", title: "Canadian neutron measurements on the ISS",
+  body: `Radi-N and Radi-N2 bubble detectors (Bubble Technology Industries, Chalk River, Ontario) measured neutron dose on the ISS during the missions of Robert Thirsk, Chris Hadfield and David Saint-Jacques. ${b.sessions} week-long sessions, ${b.first} to ${b.last}: ${Math.round(b.neutron_msv_per_day * 1000)} µSv/day on average (range ${b.range_usv_per_day[0]}–${b.range_usv_per_day[1]}). Dataset released by the CSA for the 2019 Space Apps Challenge. ${b.added_to_total ? "Added to the DosTel dose, because silicon detectors mostly miss neutrons." : "The ISS total here is the published ~0.5 mSv/day, so the CSA data sets the neutron share."} Next: CSA's CANS will measure neutrons continuously.`,
+  links: [{ t: "CSA: Radi-N2", u: "https://www.asc-csa.gc.ca/eng/sciences/radi-n2.asp" }, L.csa] });
+function neutronCard(b) {
+  if (!b.rows) return `<div class="chart"><div class="chart-head"><span>Today's dose by particle type (station)</span>${cite({ label: "CSA, 2026", title: "Neutron share of ISS radiation", body: "Neutrons make up about 30% of ISS radiation and need their own detectors, such as CSA's CANS.", links: [L.csa] })}</div>${splitBar(b.neutrons_share)}</div>`;
+  const mean = Math.round(b.neutron_msv_per_day * 1000);
+  const groups = [];
+  b.rows.forEach((x) => {
+    let g = groups.find((y) => y.mission === x.mission);
+    if (!g) groups.push(g = { mission: x.mission, experiment: x.experiment, rows: [] });
+    g.rows.push(x);
+  });
+  return `<div class="chart neutron">
+    <div class="chart-head"><span>Daily dose by particle type (station) · neutrons measured by Canadian detectors</span>${cite(CSA_SRC(b))}</div>
+    ${splitBar(b.neutrons_share)}
+    <div class="n-stats">
+      <div class="n-stat"><small>Neutrons (CSA measured)</small><b>${mean}<span> µSv/day</span></b></div>
+      <div class="n-stat"><small>Charged particles</small><b>${Math.round(b.charged_msv_per_day * 1000)}<span> µSv/day</span></b></div>
+      <div class="n-stat"><small>Bubble-detector readings</small><b>${b.sessions}<span> · ${esc(b.first.slice(0, 4))}–${esc(b.last.slice(0, 4))}</span></b></div>
+    </div>
+    <div class="label">Measured on three Canadian missions</div>
+    <div class="n-missions">${groups.map((g) => neutronMission(g, mean)).join("")}</div>
+    <small>Each dot is one week-long bubble-detector reading (hover for the date). Dashed line: average of all ${b.sessions} readings (${mean} µSv/day).</small>
+  </div>`;
+}
+
+function neutronMission(g, mean) {
+  const [who, exp] = g.mission.split(", ");
+  const avg = Math.round(g.rows.reduce((s, x) => s + x.usv_per_day, 0) / g.rows.length);
+  const years = [...new Set(g.rows.map((x) => x.start.slice(0, 4)))].join("–");
+  const W = 260, H = 46, max = 250, X = (v) => 8 + (v / max) * (W - 16);
+  const dots = g.rows.map((x, i) => `<circle cx="${X(x.usv_per_day).toFixed(1)}" cy="${20 + (i % 2 ? 6 : -6)}" r="6" fill="var(--soft)" stroke="var(--panel)" stroke-width="2"><title>Week of ${esc(x.start)}: ${x.usv_per_day} µSv/day</title></circle>`).join("");
+  const ticks = [0, 100, 200].map((t) => `<text x="${X(t)}" y="${H - 2}" font-size="10" fill="var(--faint)" text-anchor="middle">${t}</text>`).join("");
+  return `<div class="n-mission">
+    <div class="n-who"><b>${esc(who)}</b><small>${esc(exp || "")} · ${esc(years)}</small></div>
+    <div class="n-meta"><span class="n-chip">${esc(g.experiment)}</span><span>${g.rows.length} reading${g.rows.length > 1 ? "s" : ""}</span><span class="n-avg">${avg} µSv/day</span></div>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(who)}: ${g.rows.length} weekly readings, average ${avg} microsieverts per day">
+      <line x1="${X(0)}" x2="${X(max)}" y1="20" y2="20" stroke="var(--line-2)" stroke-width="2" stroke-linecap="round"/>
+      <line x1="${X(mean)}" x2="${X(mean)}" y1="4" y2="36" stroke="var(--muted)" stroke-dasharray="3 3"/>
+      ${dots}${ticks}</svg>
+  </div>`;
 }
 
 // ===================== CREW DOCTOR VIEW =====================
@@ -361,7 +406,7 @@ function personStatus(S, pid) {
   if (e && e.patient === pid) return { rank: 5, cls: "emergency", reason: `${e.what}: emergency in progress` };
   if (pid === "lena" && S.heart) {
     const h = S.heart, m = h.model;
-    if (["caution", "countdown", "doctor_woken", "confirmed"].includes(h.stage)) return { rank: 3, cls: "caution", reason: m.level === "criterion_met" ? "Possible heart problem: 12-lead ECG meets ST-elevation criterion" : "Possible heart problem: chest strap ECG changed from usual (screening)" };
+    if (["caution", "countdown", "doctor_woken", "confirmed"].includes(h.stage)) return { rank: 3, cls: "caution", reason: m.level === "criterion_met" ? "Possible heart problem: 12-lead ECG meets ST-elevation criterion" : "Possible heart problem: wearable ECG changed from usual (screening)" };
     if (h.stage === "monitored") return { rank: 2, cls: "advisory", reason: "Monitored: heart screening alert" };
   }
   if (S.doctor_woken && S.doctor_woken.by === pid) return { rank: 3, cls: "caution", reason: `${NAMES[pid]} asked for you: ${S.doctor_woken.why}` };
@@ -418,7 +463,7 @@ function evidence(S) {
     <div class="row"><h2>Lena · possible heart problem</h2>${h.stage === "monitored" ? TAG.advisory : TAG.caution}</div>
     <div style="font-size:16px">${esc(m.summary)}</div>
     <div class="two">
-      <div><div class="label">Stage</div><div>${m.level === "criterion_met" ? "12-lead criterion met" : "Screening signal (chest strap)"}</div></div>
+      <div><div class="label">Stage</div><div>${m.level === "criterion_met" ? "12-lead criterion met" : "Screening signal (wearable ECG)"}</div></div>
       <div><div class="label">Issued</div><div>${clock(h.issued_at)}${h.reading_at ? ` · 12-lead Heart reading at ${clock(h.reading_at)}` : ""}</div></div>
     </div>
     <table><tr><th>Criterion</th><th>Lena now</th><th>Status</th><th>Basis</th></tr>

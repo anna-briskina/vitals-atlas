@@ -38,14 +38,14 @@ NAMES = {c["id"]: c["name"] for c in CREW}
 # sleep ~6 h (Barger 2014). Statuses: ok | flag | missing (with a missing kind) | stale.
 BASE_INDICATORS = {
     "lena": [
-        {"key": "ecg", "name": "Heart rhythm (chest strap ECG)", "value": "Regular", "unit": "", "usual": "Regular, no ST shift",
+        {"key": "ecg", "name": "Heart rhythm (wearable ECG)", "value": "Regular", "unit": "", "usual": "Regular, no ST shift",
          "trend": "steady", "series": [0.0, 0.05, -0.05, 0.0, 0.05, 0.0, 0.0], "band": [-0.2, 0.2], "series_unit": "mm ST shift",
          "state": "ok", "why": "Fluid shifts and deconditioning change how the heart works in weightlessness; rhythm changes are a named NASA cardiovascular hazard.",
-         "risk": "Risk of Cardiovascular Adaptations", "measured": "Chest strap ECG, continuous while worn.", "src": "research_cardio"},
+         "risk": "Risk of Cardiovascular Adaptations", "measured": "Wearable ECG: the CSA Bio-Monitor shirt (continuous, day and night) or a smartwatch.", "measured_src": "bio", "src": "research_cardio"},
         {"key": "hr", "name": "Resting heart rate", "value": "56", "unit": "bpm", "usual": "52–60", "trend": "steady",
          "series": [55, 56, 54, 57, 55, 56, 56], "band": [52, 60], "series_unit": "bpm", "state": "ok",
          "why": "Resting heart rate is usually unchanged in flight, so a rise from your own range is worth a look.",
-         "risk": "Risk of Cardiovascular Adaptations", "measured": "Chest strap or watch, overnight average.", "src": "norsk"},
+         "risk": "Risk of Cardiovascular Adaptations", "measured": "Bio-Monitor shirt or smartwatch, overnight average.", "measured_src": "bio", "src": "norsk"},
         {"key": "bp", "name": "Blood pressure", "value": "110/68", "unit": "mmHg", "usual": "104–118 / 64–74", "trend": "steady",
          "series": [111, 109, 112, 110, 108, 111, 110], "band": [104, 118], "series_unit": "mmHg systolic", "state": "ok",
          "why": "Blood pressure falls about 8 to 10 mmHg in flight, so your usual range here is your in-flight range, not your Earth range.",
@@ -57,7 +57,7 @@ BASE_INDICATORS = {
         {"key": "sleep", "name": "Sleep", "value": "6.1", "unit": "h", "usual": "5.6–6.6", "trend": "steady",
          "series": [6.0, 6.3, 5.9, 6.2, 6.1, 5.8, 6.1], "band": [5.6, 6.6], "series_unit": "h", "state": "ok",
          "why": "Crews sleep about 6 hours against 8.5 scheduled; a further drop affects alertness and errors.",
-         "risk": "Risk of Inadequate Sleep and Irregular Schedules", "measured": "Wrist actigraphy (as in NASA's ARCHeR study).", "src": "barger"},
+         "risk": "Risk of Inadequate Sleep and Irregular Schedules", "measured": "Movement sensor in the Bio-Monitor shirt or a smartwatch, worn overnight (actigraphy, as in NASA's ARCHeR study).", "measured_src": "bio", "src": "barger"},
         {"key": "glucose", "name": "Blood sugar", "value": None, "unit": "mg/dL", "usual": "72–95", "state": "missing",
          "missing": "not_entered", "why": "Inactivity raises blood sugar; a fasting reading tracks it.",
          "risk": "Risk of Inadequate Food and Nutrition", "measured": "Finger-stick glucometer, fasting.", "src": "trim"},
@@ -70,7 +70,7 @@ BASE_INDICATORS = {
 SUMMARY = {   # crew doctor overview for the other crew members (Lena is computed)
     "sam": {"state": "ok", "reason": "All indicators within usual range"},
     "ravi": {"state": "ok", "reason": "Sleep 5.5 h, slightly below usual for 3 nights; preventive step suggested"},
-    "maya": {"state": "missing", "reason": "No data: watch not worn since 06:10", "missing": "sensor_off"},
+    "maya": {"state": "missing", "reason": "No data: wearable (Bio-Monitor shirt or watch) not worn since 06:10", "missing": "sensor_off"},
 }
 
 CHECKINS = [
@@ -165,10 +165,10 @@ def _start_s2():
                       "model": model, "quick_check": None, "heart_reading": False, "countdown_end": None,
                       "outcome": None}
     STATE["advisories"].insert(0, {"id": STATE["heart"]["id"], "kind": "heart", "person": "lena", "at": _now(),
-                                   "text": "Possible heart problem: chest strap ECG changed from Lena's usual pattern "
+                                   "text": "Possible heart problem: wearable ECG changed from Lena's usual pattern "
                                            "(screening signal, not diagnostic)", "dismissed": None})
     _access("lena", "Sam (crew doctor)", "Heart alert and heart indicators")
-    _log("Screening alert: Lena's chest strap ECG changed from her usual pattern. Lena and the crew doctor were told.")
+    _log("Screening alert: Lena's wearable ECG changed from her usual pattern. Lena and the crew doctor were told.")
 
 
 def _declare_heart(by):
@@ -356,7 +356,7 @@ def snapshot():
             ind.update(value="84", state="ok", trend="steady", series=[82, 85, 80, 83, 86, 81, 84], band=[72, 95],
                        series_unit="mg/dL", missing=None)
     s["indicators"] = {"lena": inds}
-    # Other crew members: same indicator set, unflagged; Maya's watch is off; Ravi gets a preventive step.
+    # Other crew members: same indicator set, unflagged; Maya's wearable is off; Ravi gets a preventive step.
     for pid in ("sam", "ravi", "maya"):
         other = copy.deepcopy(BASE_INDICATORS["lena"])
         for ind in other:

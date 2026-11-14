@@ -147,3 +147,21 @@ input[type=text], textarea, select.f { width: 100%; background: var(--panel-2); 
 .check.done .box { border-color: var(--soft); background: var(--soft); }
 .check b { display: block; font-size: 13px; }
 .check small { display: block; font-size: 11px; }
+
+/* CSA neutron card */
+.neutron { display: flex; flex-direction: column; gap: 12px; }
+.n-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.n-stat { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.n-stat b { font-family: "Space Grotesk", Inter, sans-serif; font-size: 22px; }
+.n-stat b span { font-size: 12px; font-weight: 500; color: var(--muted); }
+.n-missions { display: flex; flex-direction: column; gap: 8px; }
+.n-mission { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; display: grid; grid-template-columns: minmax(170px, 1fr) minmax(200px, 1.4fr); grid-template-areas: 'who plot' 'meta plot'; column-gap: 16px; row-gap: 4px; align-items: center; }
+.n-who { grid-area: who; } .n-meta { grid-area: meta; } .n-mission svg { grid-area: plot; }
+.n-who { display: flex; flex-direction: column; }
+.n-who b { font-size: 15px; }
+.n-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+.n-chip { border: 1px solid var(--line-2); border-radius: 999px; padding: 1px 8px; color: var(--soft); }
+.n-avg { color: var(--ink); font-weight: 700; }
+.n-mission svg { width: 100%; height: auto; display: block; }
+.n-mission circle { cursor: default; }
+@media (max-width: 560px) { .n-stats { grid-template-columns: 1fr; } .n-mission { grid-template-columns: 1fr; grid-template-areas: 'who' 'meta' 'plot'; } }

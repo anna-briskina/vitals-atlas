@@ -15,7 +15,7 @@ import random
 
 import pandas as pd
 
-from . import donki, radlab
+from . import csa, donki, radlab
 from .config import (DEFAULT_QUALITY_FACTOR, SPE_QUALITY_FACTOR, AMBER_SHARE, CAREER_LIMIT_MSV, DELAY_TEXT, DEMO_CREW, ISS_NEUTRON_SHARE, MISSIONS,
                      PUBLISHED_RATES_MSV_PER_DAY, RED_HORIZON_DAYS, RED_SHARE, SOURCES, STORM_RESPONSE)
 
@@ -154,6 +154,28 @@ def project(mode="mars", event_id=None):
         rates[base_env] = measured_rate  # use the measured usual rate for this environment
         rate_source = "real"
 
+    # Station: add the CSA's measured neutron dose. DosTel (silicon, RadLab) mostly misses neutrons, so when
+    # DosTel data is loaded, total = DosTel + CSA Radi-N/Radi-N2 neutron average. The published 0.5 mSv/day
+    # ISS figure is already a total, so then the CSA value only sets the neutron share.
+    neutron = None
+    neutron_add = 0.0
+    if mode == "station":
+        cs = csa.summary()
+        if cs:
+            n = cs["mean_usv_per_day"] / 1000
+            charged = rates["station"] if rate_source == "real" else max(rates["station"] - n, 0.0)
+            if rate_source == "real":
+                neutron_add = n
+                rates["station"] = rates["station"] + n
+            neutron = {"neutrons_share": n / (charged + n), "neutron_msv_per_day": round(n, 3),
+                       "charged_msv_per_day": round(charged, 3), "sessions": cs["sessions"],
+                       "range_usv_per_day": [cs["min_usv_per_day"], cs["max_usv_per_day"]],
+                       "first": cs["first"], "last": cs["last"], "rows": cs["rows"],
+                       "added_to_total": rate_source == "real",
+                       "note": (f"Measured neutron dose: {cs['mean_usv_per_day']:.0f} uSv/day on average over "
+                                f"{cs['sessions']} week-long CSA bubble-detector sessions on the ISS "
+                                f"({cs['first'][:4]} to {cs['last'][:4]}).")}
+
     daily = _phase_rates(mode, rates)
     total_days = len(daily)
     today = min(DEMO_CREW["mission_day"][mode], total_days)
@@ -162,7 +184,7 @@ def project(mode="mars", event_id=None):
     # past: expected rates up to today, with the last RECENT_DAYS replaced by the recent window
     past_rates = daily[:today]
     k = min(RECENT_DAYS, today)
-    past_rates[-k:] = recent[-k:]
+    past_rates[-k:] = [v + neutron_add for v in recent[-k:]]
 
     cum, s = [], prior
     for d, r in enumerate(past_rates, start=1):
@@ -227,7 +249,7 @@ def project(mode="mars", event_id=None):
 
     breakdown = None
     if mode == "station":
-        breakdown = {"neutrons_share": ISS_NEUTRON_SHARE, "note": "Neutrons are ~30% of ISS radiation (CSA, 2026)"}
+        breakdown = neutron or {"neutrons_share": ISS_NEUTRON_SHARE, "note": "Neutrons are ~30% of ISS radiation (CSA, 2026)"}
 
     return {
         "system": "radiation",
