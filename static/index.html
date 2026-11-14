@@ -3,81 +3,57 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vitals Atlas</title>
+<title>Crew Health</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <header class="topbar">
   <div class="brand">
-    <h1>Vitals Atlas</h1>
-    <p id="crew">Cmdr. A. Rivera · demo crew member</p>
+    <h1>Crew Health</h1>
+    <p id="who-line">Demo crew · prototype</p>
   </div>
+  <label class="as">Tablet of
+    <select id="as-select" aria-label="Whose tablet this is">
+      <option value="lena">Lena (flight engineer)</option>
+      <option value="sam">Sam (crew doctor)</option>
+      <option value="ravi">Ravi (backup crew medical officer)</option>
+      <option value="maya">Maya (commander)</option>
+    </select>
+  </label>
+  <nav class="tabs" id="tabs" aria-label="Views"></nav>
   <div class="spacer"></div>
-  <div>
+  <div class="mission">
     <div class="modes" role="group" aria-label="Mission setting">
       <button type="button" data-mode="station">Space station</button>
       <button type="button" data-mode="moon">Moon base</button>
       <button type="button" data-mode="mars">Mars</button>
     </div>
-    <div class="delay">Message to Earth: <b id="delay">…</b></div>
+    <div class="delay">Communications to Earth: <b id="delay">…</b></div>
   </div>
-  <div class="badge-demo">Prototype · tap ⓘ for the source of every number</div>
+  <button type="button" class="btn-get" id="get-doctor">Get crew doctor</button>
+  <button type="button" class="btn-demo" id="demo-toggle" aria-expanded="false">Demo controls</button>
 </header>
 
-<div class="banner" id="banner" role="alert">
-  <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2h8l6 6v8l-6 6H8l-6-6V8z" fill="#2a0906"/><path d="M12 7v6M12 16.5v.5" stroke="#ff6b5e" stroke-width="2.4" stroke-linecap="round"/></svg>
-  <span id="banner-text">Radiation alert: solar particle event. Whole crew to the shielded area now.</span>
-</div>
-
-<main class="grid">
-  <!-- left column: body map, then today's checks -->
-  <div class="stack">
-  <section class="panel">
-    <div class="label">Show what each hazard affects</div>
-    <div class="chips" id="hazards"></div>
-    <div class="caption" id="hazard-caption">Tap a hazard to highlight the body systems it affects, or tap a body system for details.</div>
-    <div class="body" id="body">
-      <div class="sil" style="left:118px;top:8px;width:64px;height:72px;border-radius:32px"></div>
-      <div class="sil" style="left:138px;top:76px;width:24px;height:20px"></div>
-      <div class="sil" style="left:90px;top:92px;width:120px;height:180px;border-radius:34px 34px 22px 22px"></div>
-      <div class="sil" style="left:54px;top:100px;width:32px;height:176px;border-radius:16px"></div>
-      <div class="sil" style="left:214px;top:100px;width:32px;height:176px;border-radius:16px"></div>
-      <div class="sil" style="left:98px;top:262px;width:48px;height:200px;border-radius:20px"></div>
-      <div class="sil" style="left:154px;top:262px;width:48px;height:200px;border-radius:20px"></div>
-    </div>
-    <div class="legend">
-      <span><i style="background:var(--green)"></i>Normal for you</span>
-      <span><i style="background:var(--amber)"></i>Unusual</span>
-      <span><i style="background:var(--red)"></i>Act now</span>
-    </div>
-  </section>
-
-  <section class="panel stack" style="gap:10px">
-    <div style="display:flex;justify-content:space-between;align-items:baseline"><h3>Today's checks</h3><span id="checks-count" style="font-size:12px;color:var(--muted)"></span></div>
-    <div id="checks" class="stack" style="gap:8px"></div>
-    <div class="streak"><b id="streak">6</b><span>day check-in streak<br><small>Points for doing checks, never for results</small></span></div>
-  </section>
+<section class="demo-drawer" id="demo" hidden aria-label="Demo controls">
+  <div class="demo-col">
+    <b>Scenario S2: staged heart alert</b>
+    <button type="button" class="btn" data-act="demo_start_s2">Issue low-confidence heart result for Lena</button>
   </div>
+  <div class="demo-col">
+    <b>Solar particle event replay</b>
+    <div id="spe-events" class="spe-events"></div>
+  </div>
+  <div class="demo-col">
+    <b>Demo</b>
+    <button type="button" class="btn secondary" data-act="reset">Reset everything</button>
+    <small>Open this page in several windows with a different tablet selected to see the views stay in sync.</small>
+  </div>
+</section>
 
-  <!-- detail -->
-  <section class="panel stack" id="detail" aria-live="polite"></section>
-
-  <!-- right column -->
-  <aside class="stack">
-    <section class="panel stack">
-      <h3>Solar storm replay</h3>
-      <div style="font-size:12px;color:var(--muted)">Real solar particle events from NASA's DONKI database. Pick one to replay it on the mission clock.</div>
-      <div class="events" id="events"></div>
-      <button type="button" class="btn secondary" id="end-storm" hidden>End replay</button>
-    </section>
-    <section class="panel stack">
-      <h3>Messages to Earth</h3>
-      <div id="outbox" class="stack" style="gap:8px"></div>
-    </section>
-  </aside>
-</main>
+<main id="main" aria-live="polite"></main>
 
 <div id="cite-pop" class="cite-pop" role="dialog" aria-label="Source" hidden></div>
+<div id="modal" class="modal" hidden></div>
 <script src="/static/app.js"></script>
 </body>
 </html>

@@ -16,7 +16,7 @@ import random
 import pandas as pd
 
 from . import donki, radlab
-from .config import (AMBER_SHARE, CAREER_LIMIT_MSV, DELAY_TEXT, DEMO_CREW, ISS_NEUTRON_SHARE, MISSIONS,
+from .config import (DEFAULT_QUALITY_FACTOR, SPE_QUALITY_FACTOR, AMBER_SHARE, CAREER_LIMIT_MSV, DELAY_TEXT, DEMO_CREW, ISS_NEUTRON_SHARE, MISSIONS,
                      PUBLISHED_RATES_MSV_PER_DAY, RED_HORIZON_DAYS, RED_SHARE, SOURCES, STORM_RESPONSE)
 
 SURFACE_ENV = {"station": "station", "moon": "moon_surface", "mars": "mars_surface"}
@@ -61,10 +61,14 @@ def _recent_window(mode, base_rate, event):
     """Daily dose rates for the RECENT_DAYS-day window shown in the app, real if RadLab data exists.
 
     No storm: the latest RECENT_DAYS days in the RadLab file.
-    Storm:    the RECENT_DAYS days ending STORM_WINDOW[1] days after the event, if the file covers the event
-              date. The extra dose is the measured excess above the quiet days just before the event.
-    Returns (values, dates, source, storm_extra_msv, storm_source, cv, usual_rate).
+    Storm:    the RECENT_DAYS days ending STORM_WINDOW[1] days after the event, if the file covers the date.
+              Extra dose counts only days clearly above normal variation: more than 3 robust standard deviations
+              (from the median absolute deviation of the quiet days before the event) above the quiet baseline.
+              Ordinary day-to-day noise therefore gives zero, and many storms seen near Earth never reach Mars.
+              The excess is re-weighted for solar protons (SPE_QUALITY_FACTOR instead of the GCR factor).
+    Returns (values, dates, source, storm_extra_msv, storm_source, cv, usual_rate, meta).
     """
+    meta = {"instrument": None, "detected": None, "threshold": None}
     df = radlab.load(mode)
     if df is not None and len(df) >= 7:
         df = df.sort_values("date").drop_duplicates("date", keep="last").reset_index(drop=True)
@@ -73,6 +77,7 @@ def _recent_window(mode, base_rate, event):
         median = float(rate.median())
         cv = float(rate.std() / median) if median else 0.1
         day = pd.Timedelta(days=1)
+        meta["instrument"] = str(df["instrument"].dropna().iloc[-1]) if df["instrument"].notna().any() else None
 
         ev_day = pd.to_datetime(event["date"]) if event and event.get("date") else None
         covered = ev_day is not None and (df["d"] == ev_day).any()
@@ -80,26 +85,31 @@ def _recent_window(mode, base_rate, event):
             end = ev_day + STORM_WINDOW[1] * day
             seg = df[(df["d"] > end - RECENT_DAYS * day) & (df["d"] <= end)]
             quiet = df[(df["d"] >= ev_day - 21 * day) & (df["d"] <= ev_day + (STORM_WINDOW[0] - 1) * day)]
-            base = float(quiet["dose_msv_per_day"].median()) if len(quiet) >= 5 else median
+            qv = quiet["dose_msv_per_day"] if len(quiet) >= 5 else rate
+            base = float(qv.median())
+            sigma = max(1.4826 * float((qv - base).abs().median()), 0.03 * base)
+            threshold = base + 3 * sigma
             storm = df[(df["d"] >= ev_day + STORM_WINDOW[0] * day) & (df["d"] <= end)]
-            extra = float((storm["dose_msv_per_day"] - base).clip(lower=0).sum())
-            return seg["dose_msv_per_day"].tolist(), seg["date"].tolist(), "real", extra, "real", cv, median
+            sig = storm[storm["dose_msv_per_day"] > threshold]
+            # re-weight the excess for solar protons: (excess / GCR factor applied) x SPE factor
+            w = sig["q"].apply(lambda q: SPE_QUALITY_FACTOR / q if q and q > 0 else 1.0)
+            extra = float(((sig["dose_msv_per_day"] - base) * w).sum())
+            meta.update(detected=bool(len(sig)), threshold=round(threshold, 3))
+            return seg["dose_msv_per_day"].tolist(), seg["date"].tolist(), "real", extra, "real", cv, median, meta
 
         last = df["d"].max()
         seg = df[df["d"] > last - RECENT_DAYS * day]
         vals, extra, storm_src = seg["dose_msv_per_day"].tolist(), 0.0, None
         if event:
-            # RadLab does not cover this event date: real baseline, simulated storm on top
             vals, extra = _add_simulated_storm(vals, median)
             storm_src = "simulated"
-        return vals, seg["date"].tolist(), "real", extra, storm_src, cv, median
-    # no RadLab data yet: simulated around the published rate
+        return vals, seg["date"].tolist(), "real", extra, storm_src, cv, median, meta
     vals = _simulated_recent(base_rate, RECENT_DAYS, seed=mode)
     extra, storm_src = 0.0, None
     if event:
         vals, extra = _add_simulated_storm(vals, base_rate)
         storm_src = "simulated"
-    return vals, None, "simulated", extra, storm_src, 0.06, base_rate
+    return vals, None, "simulated", extra, storm_src, 0.06, base_rate, meta
 
 
 def _add_simulated_storm(vals, base):
@@ -112,7 +122,7 @@ def _add_simulated_storm(vals, base):
     start = len(vals) - len(profile)
     extra = 0.0
     for k, m in enumerate(profile):
-        new = base * m
+        new = base + (m - 1) * base * SPE_QUALITY_FACTOR / DEFAULT_QUALITY_FACTOR   # proton-weighted excess
         extra += max(0.0, new - base)
         vals[start + k] = round(new, 3)
     return vals, extra
@@ -138,7 +148,7 @@ def project(mode="mars", event_id=None):
     event = _find_event(event_id)
 
     base_env = SURFACE_ENV[mode]
-    recent, recent_dates, recent_src, storm_extra, storm_src, cv, measured_rate = _recent_window(
+    recent, recent_dates, recent_src, storm_extra, storm_src, cv, measured_rate, meta = _recent_window(
         mode, rates[base_env], event)
     if recent_src == "real":
         rates[base_env] = measured_rate  # use the measured usual rate for this environment
@@ -226,7 +236,7 @@ def project(mode="mars", event_id=None):
         "nasaRisk": "Risk of Radiation-Induced Cancers",
         "mission": {"mode": mode, "label": MISSIONS[mode]["label"], "today": today, "totalDays": total_days,
                     "phaseToday": _phase_at(mode, today), "delay": DELAY_TEXT[mode],
-                    "instrument": MISSIONS[mode]["radlab_instrument"]},
+                    "instrument": meta["instrument"] or MISSIONS[mode]["radlab_instrument"]},
         "dose": {"priorCareer": prior, "soFar": round(so_far, 1), "projectedTotal": round(projected_total, 1),
                  "limit": CAREER_LIMIT_MSV, "shareOfLimit": round(share, 3), "limitDay": limit_day,
                  "todayRate": round(recent[-1], 3)},
@@ -238,6 +248,7 @@ def project(mode="mars", event_id=None):
         "storm": None if not event else {
             "id": event["id"], "date": event.get("date"), "link": event.get("link"),
             "eventSource": event.get("source"), "doseSource": storm_src, "extraDose": round(storm_extra, 2),
+            "detected": meta["detected"], "threshold": meta["threshold"],
             "banner": storm_rule["banner"], "severity": storm_rule["status"], "where": env_today},
         "breakdown": breakdown,
         "actions": actions,
@@ -245,7 +256,7 @@ def project(mode="mars", event_id=None):
         "source": rate_source,
         "assumptions": [
             f"Expected daily rates per phase: {SOURCES['mars']}; {SOURCES['moon']}; ISS ~0.5 mSv/day.",
-            f"Absorbed dose converted to dose equivalent with quality factor ~3 (Curiosity RAD).",
+            "Absorbed dose converted to dose equivalent with quality factor ~3 for cosmic rays (Curiosity RAD); storm (solar proton) excess weighted at 1.5. Daily values are time-weighted means.",
             f"Uncertainty band +/-{spread:.0%} from day-to-day variation in the data (min 10%).",
             "Prior career dose (40 mSv) and mission day are demo values for a fictional crew member.",
         ],

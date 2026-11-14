@@ -80,6 +80,16 @@ def load_cached():
     return out
 
 
+# DONKI SEP records list the instruments that saw the event. Some records come only from forecast models;
+# only records with at least one observing spacecraft instrument count as a real storm.
+OBSERVING = ("GOES", "SOHO", "STEREO", "ACE", "SDO", "WIND", "PSP", "PARKER", "SOLO", "SOLAR ORBITER")
+
+
+def is_observed(ev):
+    names = [str(n).upper() for n in ev["instruments"]]
+    return any(n.startswith(OBSERVING) for n in names)
+
+
 def simplify(ev):
     """Keep the fields the app needs."""
     instruments = [i.get("displayName", "") for i in (ev.get("instruments") or [])]
@@ -95,15 +105,35 @@ def simplify(ev):
     }
 
 
-def events():
-    """Simplified cached events, newest first."""
+def events(include_models=False):
+    """Real storms, newest first: forecast-only records dropped, records within 1 day merged into one storm."""
+    from datetime import date
     evs = [simplify(e) for e in load_cached()]
-    return sorted(evs, key=lambda e: e["time"] or "", reverse=True)
+    evs = [e for e in evs if e["date"] and (include_models or is_observed(e))]
+    evs.sort(key=lambda e: e["time"] or "")
+    storms = []
+    for e in evs:
+        d = date.fromisoformat(e["date"])
+        if storms and (d - date.fromisoformat(storms[-1]["date"])).days <= 1:
+            st = storms[-1]
+            st["records"].append(e["id"])
+            st["instruments"] = sorted(set(st["instruments"]) | set(e["instruments"]))
+        else:
+            storms.append({**e, "records": [e["id"]]})
+    return list(reversed(storms))
+
+
+def counts():
+    raw = [simplify(e) for e in load_cached()]
+    observed = [e for e in raw if e["date"] and is_observed(e)]
+    return {"records": len(raw), "observed_records": len(observed), "forecast_only": len(raw) - len(observed),
+            "storms": len(events())}
 
 
 if __name__ == "__main__":
     s, e = (sys.argv[1], sys.argv[2]) if len(sys.argv) == 3 else ("2017-01-01", "2017-12-31")
     evs = fetch_sep(s, e)
-    print(f"Saved {len(evs)} SEP events from {s} to {e} into {_cache_path(s, e)}")
+    print(f"Saved {len(evs)} SEP records from {s} to {e} into {_cache_path(s, e)}")
+    print("All cached:", counts())
     for ev in evs[:15]:
         print(" ", ev.get("sepID"))

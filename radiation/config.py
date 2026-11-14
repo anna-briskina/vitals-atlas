@@ -68,6 +68,11 @@ PUBLISHED_RATES_MSV_PER_DAY = {
 # Curiosity RAD measured roughly 3.0 to 3.8 (Zeitlin 2013, Hassler 2014). Override per instrument if known.
 DEFAULT_QUALITY_FACTOR = 3.0
 
+# Solar particle event protons have a much lower average quality factor than galactic cosmic rays.
+# Storm excess dose is weighted at 1.5 (per the team's radiation review of NASA practice; confirm the exact
+# citation in NASA-STD-3001 Vol. 1 / the OCHMO radiation technical brief before quoting it).
+SPE_QUALITY_FACTOR = 1.5
+
 # CSA: neutrons are about 30% of total radiation on the ISS ("Monitoring Radiation for Astronaut Health", Feb 2026).
 ISS_NEUTRON_SHARE = 0.30
 
@@ -89,7 +94,7 @@ MISSIONS = {
             {"name": "Moon surface", "days": 357, "env": "moon_surface"},
             {"name": "Transit home", "days": 4, "env": "deep_space"},
         ],
-        "radlab_instrument": "Chang'e 4 LND (Moon surface)",
+        "radlab_instrument": "Moon surface dose (published Chang'e 4 LND rate)",
     },
     "mars": {
         "label": "Mars, ~2.4 years",
