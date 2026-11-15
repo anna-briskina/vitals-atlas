@@ -10,6 +10,7 @@ predictions never worded as a diagnosis, the human confirms, works offline.
 ```bash
 pip install -r requirements.txt
 python server.py            # http://localhost:5000
+python tools/get_fonts.py   # optional, once: saves the two fonts locally so the look also works offline
 ```
 
 Open several windows, one per tablet, to see the views stay in sync:
@@ -17,28 +18,50 @@ Open several windows, one per tablet, to see the views stay in sync:
 | URL | Tablet |
 | --- | --- |
 | `/?as=lena` | Lena, flight engineer (patient in scenario S2) |
-| `/?as=sam` | Sam, crew doctor (tabs: My health, Crew doctor) |
+| `/?as=sam` | Sam, crew doctor (adds the Crew doctor tab) |
 | `/?as=ravi` | Ravi, backup crew medical officer |
-| `/?as=maya` | Maya, commander and emergency recorder |
+| `/?as=maya` | Maya, commander (her wearable is off: shows the Stale and missing states) |
 
-"Demo controls" (top right) starts scenario S2, replays a solar particle event, or resets everything.
+**Press D** to open or close the demo controls (hidden from the tablet screen). They switch the tablet and mission setting, raises the S2 heart caution, replays a solar particle
+event, or resets everything.
+
+## Look and layout (design team's health-caution.html, 2026-11-15)
+
+- **Top bar:** GMT clock in NASA's form (`GMT 319/03:11:00`), Earth link and delay, the active alert in the centre
+  (yellow caution, red emergency, neutral otherwise), and **Doctor** and **SOS** on every tablet.
+- **Bottom navigation:** Health, Alerts, Crew; Emergency while one is active; Crew doctor on Sam's tablet.
+- **Health tab:** one card per measure, drawn by the design's own rules, copied unchanged into
+  `static/health-cards.js` (Parts 1 to 3: chart, measure definitions, pill colour rule, trend, reading, amount
+  outside the range, reference sentence, stale and missing states, screen-reader sentences). One measure is added:
+  the wearable ECG's ST segment. The server sends each person's data in the design's `crew-data.js` shape
+  (`crew/engine.py`, `_health()`).
+- **Check-in panel:** the design's panel, wired to the shared state (answers, 3-minute answer window, crew doctor
+  seen time, heart reading, change answer).
+- Icons are inline SVG (`static/icons.js`), so nothing needs an icon font.
 
 ## Scenario S2: staged heart alert (demo script)
 
-1. Demo controls: issue the heart screening alert. Lena's wearable ECG has moved outside her own usual
-   range (with resting heart rate also outside its range). Lena sees a caution that says it is a screening
-   signal, not a diagnosis; Sam gets a quiet advisory in his review list. Nobody else is told.
-2. Lena answers the quick check. Yes: 10-second countdown to a crew-wide alert (she can stop it, which wakes
-   only the crew doctor). Not sure: crew doctor woken. No: monitored.
-3. Sam opens the evidence: a table of criteria, each with Lena's value, met / not met / not yet known, and its
-   basis. He records a 12-lead Heart reading, which is checked against the published ST-elevation criterion.
+1. Demo: raise the heart caution for Lena. Her wearable ECG's ST segment and heart rate have moved outside her own
+   usual range. Lena's bar turns yellow ("Caution: Heart warning signs"), the check-in panel opens by itself, and
+   the cards involved carry "In this caution". Sam gets a quiet blue advisory. Nobody else is told.
+2. Lena answers "Do you have chest pain, pressure or discomfort?" (design file behaviour):
+   Yes: the crew doctor is alerted now and decides; it does not declare an emergency. Not sure: take a heart reading,
+   and the crew doctor is also alerted. No: take a heart reading. No answer within 3 minutes: the crew doctor is
+   alerted, and she can still answer. Lena sees when Sam has seen it.
+3. Sam (yellow bar: "Lena needs the crew doctor") opens the evidence: a table of criteria, each with Lena's value,
+   met / not met / not yet known, and its basis. A 12-lead heart reading is checked against the published
+   ST-elevation criterion. He can also run the ACTIS blood clot test (CSA D-dimer test, Crew-13; mock result) to
+   rule out a clot, another cause of chest pain. Lena's own cards are below.
 4. Sam decides (escalate, monitor, confirm, override) with a reason; every decision is recorded.
    Escalate starts a countdown he can stop, or "Send now".
-5. Emergency on every tablet: what, who, where, and each person's own action in the largest text; "I'm
-   responding" / on the way / on scene; checklist with roles and recorded results; patient screen; report to
-   Earth sent automatically with the earliest possible reply and "Continue without waiting".
-6. Sam ends it with a reason and outcome (confirmed, false alarm, not yet known). Every tablet returns to
-   normal, crew access to Lena's data closes and Lena sees what was shared, with whom, and when.
+5. Emergency on every tablet (red bar, Emergency tab first): each person's own action in the largest text;
+   "I'm responding" / on the way / on scene; checklist with roles and recorded results; Lena's heart cards for the
+   responders (emergency data only); report to Earth sent automatically with the earliest possible reply and
+   "Continue without waiting".
+6. Sam ends it with a reason and outcome. Every tablet returns to normal, crew access to Lena's data closes and Lena
+   sees what was shared, with whom, and when. Past events are listed in the Alerts tab.
+
+SOS on any tablet asks once, then declares a crew-wide emergency with that person's name and location.
 
 ### Where the readings come from
 
@@ -64,6 +87,28 @@ Bio-Monitor data.
 - All values are demo values for a fictional crew member. Treatment detail is mock content and is labelled.
   The example lab history in the crew doctor view is real Inspiration4 data (NASA OSDR OSD-569, OSD-575),
   labelled as an example, not Lena's.
+
+## Local impact
+
+Built for Mars, where the doctor is 14 minutes away. The same tool works where the doctor is a flight away.
+
+The app's care model matches many of Canada's remote and northern fly-in communities:
+
+| In space | In a remote community |
+|---|---|
+| A tablet for every crew member | A tablet per patient or household |
+| A wearable (Bio-Monitor shirt or smartwatch) that flags changes early | The same wearable |
+| A crew doctor who is not a specialist responds first | A community nurse responds first |
+| A report to Earth with a communication delay | Telehealth or medevac with a delay of hours |
+
+The CSA's own advisory council makes this link: technology for medical care far from a doctor also serves remote
+communities in Canada ([Health Beyond report](https://www.asc-csa.gc.ca/eng/publications/health-beyond-report-advisory-council-deep-space-healthcare.asp)).
+Canadian hardware runs through the app: the Bio-Monitor shirt is in use on the ISS right now by CSA astronaut Joshua
+Kutryk ([Crew-13 science activities](https://www.asc-csa.gc.ca/eng/missions/crew-13/science-activities.asp)), and the
+station neutron dose comes from CSA Radi-N/Radi-N2 measurements by Canadian astronauts.
+
+Note: the Crew-13 experiments themselves do not state a northern-health goal; the link to remote communities is our
+app's design, supported by the Health Beyond report.
 
 ## Radiation
 

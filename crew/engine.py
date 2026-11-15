@@ -4,8 +4,8 @@ One in-memory state on the server; every tablet polls /api/state and sends actio
 stay in sync. Everything here is DEMO data for a fictional crew.
 
 Scenario S2 (staged heart alert):
-  caution (Lena + quiet advisory to crew doctor) -> quick check -> [Yes: countdown -> crew-wide emergency |
-  stop: crew doctor woken | Not sure: crew doctor woken | No: monitored] -> Heart reading -> crew doctor decides
+  caution (Lena + quiet advisory to crew doctor) -> check-in [Yes: crew doctor alerted, decides | Not sure: heart
+  reading + crew doctor alerted | No: heart reading | no answer in 3 min: crew doctor alerted] -> crew doctor decides
   (confirm / monitor / escalate / override) -> escalate countdown or "Send now" -> emergency -> roster, checklist,
   Earth report -> crew doctor stands down with reason and outcome -> access closed and logged.
 Scenario SPE (solar particle event): crew-wide "go to the shelter", roster with "in shelter".
@@ -33,51 +33,76 @@ CREW = [
 ]
 NAMES = {c["id"]: c["name"] for c in CREW}
 
-# Personal in-flight baselines. Numbers are demo values shaped by the team's research file:
+# Personal in-flight baselines, in the design team's crew-data.js shape (app/health-caution.html): for each measure
+# a unit, the reference it is read against (usualRange, plan, publishedLine or usual word), mock medical limits and
+# 7 daily readings, oldest first. DEMO values for a fictional crew, shaped by published in-flight changes:
 # blood pressure ~8-10 mmHg lower in flight (Norsk 2015), core temperature ~1 C higher (Stahn 2017),
-# sleep ~6 h (Barger 2014). Statuses: ok | flag | missing (with a missing kind) | stale.
-BASE_INDICATORS = {
-    "lena": [
-        {"key": "ecg", "name": "Heart rhythm (wearable ECG)", "value": "Regular", "unit": "", "usual": "Regular, no ST shift",
-         "trend": "steady", "series": [0.0, 0.05, -0.05, 0.0, 0.05, 0.0, 0.0], "band": [-0.2, 0.2], "series_unit": "mm ST shift",
-         "state": "ok", "why": "Fluid shifts and deconditioning change how the heart works in weightlessness; rhythm changes are a named NASA cardiovascular hazard.",
-         "risk": "Risk of Cardiovascular Adaptations", "measured": "Wearable ECG: the CSA Bio-Monitor shirt (continuous, day and night) or a smartwatch.", "measured_src": "bio", "src": "research_cardio"},
-        {"key": "hr", "name": "Resting heart rate", "value": "56", "unit": "bpm", "usual": "52–60", "trend": "steady",
-         "series": [55, 56, 54, 57, 55, 56, 56], "band": [52, 60], "series_unit": "bpm", "state": "ok",
-         "why": "Resting heart rate is usually unchanged in flight, so a rise from your own range is worth a look.",
-         "risk": "Risk of Cardiovascular Adaptations", "measured": "Bio-Monitor shirt or smartwatch, overnight average.", "measured_src": "bio", "src": "norsk"},
-        {"key": "bp", "name": "Blood pressure", "value": "110/68", "unit": "mmHg", "usual": "104–118 / 64–74", "trend": "steady",
-         "series": [111, 109, 112, 110, 108, 111, 110], "band": [104, 118], "series_unit": "mmHg systolic", "state": "ok",
-         "why": "Blood pressure falls about 8 to 10 mmHg in flight, so your usual range here is your in-flight range, not your Earth range.",
-         "risk": "Risk of Cardiovascular Adaptations", "measured": "Cuff, morning, seated quietly.", "src": "norsk"},
-        {"key": "temp", "name": "Body temperature", "value": "37.6", "unit": "°C", "usual": "37.3–37.9", "trend": "steady",
-         "series": [37.5, 37.6, 37.6, 37.7, 37.5, 37.6, 37.6], "band": [37.3, 37.9], "series_unit": "°C", "state": "ok",
-         "why": "Resting core temperature rises about 1 °C over the first months in flight, so 37.6 °C is normal for you here.",
-         "risk": "Risk of Altered Immune System Responses", "measured": "Forehead core-temperature sensor.", "src": "stahn"},
-        {"key": "sleep", "name": "Sleep", "value": "6.1", "unit": "h", "usual": "5.6–6.6", "trend": "steady",
-         "series": [6.0, 6.3, 5.9, 6.2, 6.1, 5.8, 6.1], "band": [5.6, 6.6], "series_unit": "h", "state": "ok",
-         "why": "Crews sleep about 6 hours against 8.5 scheduled; a further drop affects alertness and errors.",
-         "risk": "Risk of Inadequate Sleep and Irregular Schedules", "measured": "Movement sensor in the Bio-Monitor shirt or a smartwatch, worn overnight (actigraphy, as in NASA's ARCHeR study).", "measured_src": "bio", "src": "barger"},
-        {"key": "glucose", "name": "Blood sugar", "value": None, "unit": "mg/dL", "usual": "72–95", "state": "missing",
-         "missing": "not_entered", "why": "Inactivity raises blood sugar; a fasting reading tracks it.",
-         "risk": "Risk of Inadequate Food and Nutrition", "measured": "Finger-stick glucometer, fasting.", "src": "trim"},
-        {"key": "mood", "name": "Mood check-in", "value": "Entered today", "unit": "", "usual": "", "state": "ok", "trend": "",
-         "why": "Isolation and confinement affect mood; NASA lists no monitoring tool for this risk.",
-         "risk": "Risk of Behavioral Changes and Psychiatric Disorders", "measured": "Short check-in; private to you.", "src": "behav", "private": True},
-    ],
+# sleep ~6 h (Barger 2014). Medical limits are mock (design file), for heart rate and blood pressure only.
+ENTRY_TODAY = {"hydration": 2, "mood": "Good", "stress": "Low", "reactionTime": 266}   # value when entered today
+ENTRY_IDS = list(ENTRY_TODAY)
+
+BASE = {
+    "stShift": {"unit": "millimetres ST shift", "usualRange": {"low": -0.2, "high": 0.2}, "medicalLimit": None,
+                "staleAfterMinutes": 10, "v": [0.0, 0.1, -0.1, 0.0, 0.1, 0.0, 0.0]},
+    "heartRate": {"unit": "beats per minute", "usualRange": {"low": 52, "high": 60},
+                  "medicalLimit": {"low": 40, "high": 131}, "staleAfterMinutes": 10, "v": [55, 56, 54, 57, 55, 56, 56]},
+    "exercise": {"unit": "minutes", "plan": 120, "stateSetByHand": "within", "v": [125, 120, 118, 130, 122, 121, 95]},
+    "bloodPressure": {"unit": "millimetres of mercury",
+                      "usualRange": {"systolic": {"low": 104, "high": 118}, "diastolic": {"low": 64, "high": 74}},
+                      "medicalLimit": {"systolic": {"low": 90, "high": 180}, "diastolic": {"high": 120}},
+                      "staleAfterMinutes": None, "time": "07:00:00",
+                      "v": [(111, 68), (109, 67), (112, 69), (110, 68), (108, 66), (111, 68), (110, 68)]},
+    "hydration": {"unit": "urine colour step, 1 palest to 8 darkest", "publishedLine": 3, "stateSetByHand": "within",
+                  "v": [2, 2, 3, 2, 2, 3, 2]},
+    "bodyTemperature": {"unit": "degrees Celsius", "usualRange": {"low": 37.3, "high": 37.9}, "publishedLine": 38.0,
+                        "medicalLimit": None, "staleAfterMinutes": None, "time": "07:00:00",
+                        "v": [37.5, 37.6, 37.6, 37.7, 37.5, 37.6, 37.6]},
+    "reactionTime": {"unit": "milliseconds", "usualRange": {"low": 250, "high": 290}, "medicalLimit": None,
+                     "v": [262, 270, 258, 268, 265, 272, 268]},
+    "sleep": {"unit": "minutes", "usualRange": {"low": 336, "high": 396}, "medicalLimit": None,
+              "v": [360, 378, 354, 372, 366, 348, 366]},
+    "mood": {"unit": "word", "usual": "Good", "stateSetByHand": "within",
+             "v": ["Good", "Good", "Okay", "Good", "Good", "Good", "Good"]},
+    "stress": {"unit": "word", "usual": "Low", "stateSetByHand": "within",
+               "v": ["Low", "Low", "Low", "Some", "Low", "Low", "Low"]},
+}
+SENSORS = {"stShift", "heartRate", "exercise", "bloodPressure", "bodyTemperature", "sleep"}
+PERSON = {   # per-person changes to BASE (demo)
+    "sam": {"heartRate": {"usualRange": {"low": 54, "high": 64}, "v": [58, 59, 57, 60, 58, 59, 58]}},
+    "ravi": {"heartRate": {"usualRange": {"low": 56, "high": 66}, "v": [60, 61, 59, 62, 60, 61, 60]},
+             "sleep": {"v": [366, 372, 360, 350, 330, 330, 330]}},
+    "maya": {"heartRate": {"usualRange": {"low": 50, "high": 60}, "v": [54, 55, 53, 56, 54, 55, 55]}},
+}
+S2_CAUTION = {   # Lena's last days while the S2 heart alert is open (matches crew/heart.py)
+    "stShift": [0.0, 0.1, 0.0, 0.1, 0.3, 0.6, 0.9],
+    "heartRate": [55, 56, 55, 57, 60, 64, 68],
+    "bloodPressure": [(111, 68), (109, 67), (112, 69), (110, 68), (114, 70), (119, 73), (124, 76)],
+}
+CAUTION_MEASURES = ["stShift", "heartRate", "bloodPressure"]
+ANSWER_WINDOW_S = 180   # unanswered check-in: the crew doctor is alerted after 3 minutes (design file)
+CHECK_IN = {   # wording from the design file, adapted to scenario S2 (mock; the panel's words are being redesigned)
+    "details": "Your wearable ECG has changed from your usual pattern, and your heart rate and blood pressure are "
+               "higher than your usual range.",
+    "question": "Do you have chest pain, pressure or discomfort?",
+    "symptom": "chest pain, pressure or discomfort",
+    "afterYes": "Stay where you are and rest. If the pain gets worse, press SOS.",
+    "outcomes": {"Yes": "The crew doctor is alerted now and decides what happens next.",
+                 "Not sure": "Take a heart reading. The crew doctor is also alerted.",
+                 "No": "Take a heart reading."},
+}
+ANSWER_WORD = {"yes": "Yes", "unsure": "Not sure", "no": "No"}
+
+SUMMARY = {   # crew doctor overview line for the other crew members (Lena is computed)
+    "sam": {"state": "ok", "reason": "All measures within usual range"},
+    "ravi": {"state": "preventive", "reason": "Sleep below usual range for 3 nights; preventive step suggested"},
+    "maya": {"state": "missing", "reason": "No new data: wearable (Bio-Monitor shirt or watch) not worn for 3 hours",
+             "missing": "sensor_off"},
 }
 
-SUMMARY = {   # crew doctor overview for the other crew members (Lena is computed)
-    "sam": {"state": "ok", "reason": "All indicators within usual range"},
-    "ravi": {"state": "ok", "reason": "Sleep 5.5 h, slightly below usual for 3 nights; preventive step suggested"},
-    "maya": {"state": "missing", "reason": "No data: wearable (Bio-Monitor shirt or watch) not worn since 06:10", "missing": "sensor_off"},
-}
-
-CHECKINS = [
-    {"id": "bp", "label": "Blood pressure", "sub": "Cuff, seated quietly · 2 min"},
-    {"id": "mood", "label": "Mood check-in", "sub": "5 taps · 30 s"},
-    {"id": "glucose", "label": "Blood sugar (fasting)", "sub": "Finger-stick · 2 min"},
-    {"id": "fatigue", "label": "Reaction-time test", "sub": "3 min"},
+SOS_CHECKLIST = [
+    {"step": "Go to the crew member and ask what is wrong", "role": "First responder", "result_hint": "What they report"},
+    {"step": "Check breathing, pulse and responsiveness", "role": "Crew doctor", "result_hint": "Findings"},
+    {"step": "Record vital signs every 5 minutes", "role": "Recorder", "result_hint": "HR, BP, SpO2"},
 ]
 
 HEART_CHECKLIST = [
@@ -119,7 +144,9 @@ def _fresh():
         "access_log": {"lena": []},
         "access_closed_notice": None,
         "doctor_woken": None,
-        "checkins": {"bp": True, "mood": True, "glucose": False, "fatigue": False},
+        "checkins": {pid: {k: not (pid == "lena" and k in ("stress", "reactionTime")) and not (pid == "ravi" and k == "stress")
+                           for k in ENTRY_IDS} for pid in NAMES},   # entered today, per person
+
         "streak": 6,
         "track": {"alerts": 0, "confirmed": 0, "not_confirmed": 0},   # this mission only, real counts
         "events": [],           # timeline for the demo
@@ -147,6 +174,12 @@ def _access(person, who, data):
 # ------------------------------------------------------------------ time-based transitions
 def _tick():
     h = STATE["heart"]
+    if (h and h["stage"] == "caution" and not h.get("quick_check") and not h.get("unanswered_alerted")
+            and _now() >= h["issued_at"] + ANSWER_WINDOW_S):
+        h["unanswered_alerted"] = _now()
+        STATE["doctor_woken"] = {"by": "lena", "at": h["issued_at"] + ANSWER_WINDOW_S,
+                                 "why": "No answer to the check-in within 3 minutes"}
+        _log("Lena did not answer the check-in within 3 minutes. Crew doctor alerted.")
     if h and h.get("countdown_end") and _now() >= h["countdown_end"]:
         h["countdown_end"] = None
         _declare_heart(by=h.get("countdown_by", "system"))
@@ -213,22 +246,24 @@ def action(a, who="lena"):
             pass
         elif t == "demo_start_s2" and not h and not e:
             _start_s2()
-        elif t == "quick_check" and h and h["stage"] == "caution":
+        elif t == "quick_check" and h and h["stage"] in ("caution", "doctor_woken", "monitored"):
+            # Design file (health-caution.html): "Yes" does not declare an emergency; the crew doctor is told and decides.
             ans = a.get("answer")
-            h["quick_check"] = ans
-            h["model"] = heart.assess(h["model"]["stage"], symptom=ans)
-            if ans == "yes":
-                h["stage"] = "countdown"
-                h["countdown_end"] = _now() + COUNTDOWN_S
-                h["countdown_by"] = "Lena (quick check: yes)"
-                _log("Lena answered Yes to chest discomfort. Countdown to crew-wide alert started.")
-            elif ans == "unsure":
+            h["quick_check"], h["answered_at"] = ans, _now()
+            h["model"] = heart.assess(h["model"]["stage"], symptom=ans, clot_test=h.get("clot_test"))
+            if ans in ("yes", "unsure"):
                 h["stage"] = "doctor_woken"
-                STATE["doctor_woken"] = {"by": "lena", "at": _now(), "why": "Quick check: not sure"}
-                _log("Lena answered Not sure. Crew doctor woken; nobody else alerted.")
+                STATE["doctor_woken"] = {"by": "lena", "at": _now(),
+                                         "why": f"Check-in answer: {ANSWER_WORD[ans]} to chest pain, pressure or discomfort"}
+                _log(f"Lena answered {ANSWER_WORD[ans]}. Crew doctor alerted; nobody else.")
             else:
                 h["stage"] = "monitored"
-                _log("Lena answered No. Result is monitored; recheck in 1 hour.")
+                _log("Lena answered No. Asked to take a heart reading; result monitored.")
+        elif t == "change_answer" and h and h.get("quick_check") and h["stage"] in ("doctor_woken", "monitored"):
+            h["quick_check"], h["answered_at"] = None, None
+            h["stage"] = "caution"
+        elif t == "doctor_seen" and h and not h.get("seen_at"):
+            h["seen_at"] = _now()
         elif t == "stop_countdown" and h and h.get("countdown_end"):
             h["countdown_end"] = None
             h["stage"] = "doctor_woken"
@@ -236,11 +271,15 @@ def action(a, who="lena"):
             _log(f"{NAMES.get(who, who)} stopped the countdown. Only the crew doctor was woken.")
         elif t == "heart_reading" and h and h["stage"] not in ("emergency",):
             h["heart_reading"] = True
-            h["model"] = heart.assess("confirming", symptom=h.get("quick_check"))
+            h["model"] = heart.assess("confirming", symptom=h.get("quick_check"), clot_test=h.get("clot_test"))
             h["reading_at"] = _now()
             if h["stage"] == "caution":
                 h["stage"] = "doctor_woken"
             _log("12-lead Heart reading taken: meets the ST-elevation criterion (possible heart attack).")
+        elif t == "clot_test" and h and h["stage"] not in ("emergency",) and not h.get("clot_test"):
+            h["clot_test"], h["clot_at"] = True, _now()
+            h["model"] = heart.assess(h["model"]["stage"], symptom=h.get("quick_check"), clot_test=True)
+            _log("ACTIS blood clot test (D-dimer): normal, blood clot unlikely (mock result).")
         elif t == "decide" and h:
             d = a.get("decision")
             STATE["decisions"].insert(0, {"at": _now(), "who": "Sam (crew doctor)", "decision": d,
@@ -274,6 +313,9 @@ def action(a, who="lena"):
                                                   "reason": adv["dismissed"], "result": None})
             if h and h["id"] == a.get("id") and h["stage"] != "emergency":
                 h["stage"] = "cleared"
+        elif t == "sos" and not e:
+            _declare("sos", who, f"SOS from {NAMES.get(who, who)}", NAMES.get(who, who), SOS_CHECKLIST,
+                     detail="SOS pressed on the tablet")
         elif t == "get_doctor":
             STATE["doctor_woken"] = {"by": who, "at": _now(), "why": "Get crew doctor pressed"}
             _log(f"{NAMES.get(who, who)} pressed Get crew doctor.")
@@ -325,9 +367,9 @@ def action(a, who="lena"):
             if a.get("mode") in ONE_WAY_S:
                 STATE["mode"] = a["mode"]
         elif t == "checkin":
-            k = a.get("id")
-            if k in STATE["checkins"]:
-                STATE["checkins"][k] = not STATE["checkins"][k]
+            k, mine = a.get("id"), STATE["checkins"].get(who, {})
+            if k in mine:
+                mine[k] = True
         return snapshot()
 
 
@@ -340,32 +382,80 @@ def snapshot():
     s["one_way_s"] = ONE_WAY_S[s["mode"]]
     s["countdown_s"] = COUNTDOWN_S
     s["treatment_mock"] = TREATMENT_MOCK
-    s["checkin_defs"] = CHECKINS
-    # Lena's indicators, adjusted for the heart scenario
-    inds = copy.deepcopy(BASE_INDICATORS["lena"])
-    h = s["heart"]
-    if h and h["stage"] not in ("cleared", "closed"):
-        for ind in inds:
-            if ind["key"] == "ecg":
-                ind.update(value="ST shift +0.9 mm", usual="No ST shift (±0.2 mm)", trend="rising", state="flag",
-                           series=[0.0, 0.05, 0.0, 0.1, 0.3, 0.6, 0.9])
-            if ind["key"] == "hr":
-                ind.update(value="68", trend="rising", state="flag", series=[55, 56, 55, 57, 60, 64, 68])
-    for ind in inds:
-        if ind["key"] == "glucose" and s["checkins"].get("glucose"):
-            ind.update(value="84", state="ok", trend="steady", series=[82, 85, 80, 83, 86, 81, 84], band=[72, 95],
-                       series_unit="mg/dL", missing=None)
-    s["indicators"] = {"lena": inds}
-    # Other crew members: same indicator set, unflagged; Maya's wearable is off; Ravi gets a preventive step.
-    for pid in ("sam", "ravi", "maya"):
-        other = copy.deepcopy(BASE_INDICATORS["lena"])
-        for ind in other:
-            if pid == "maya" and ind["key"] in ("ecg", "hr", "sleep"):
-                ind.update(value=None, state="missing", missing="sensor_off", trend="")
-            if pid == "ravi" and ind["key"] == "sleep":
-                ind.update(value="5.5", trend="falling", series=[6.1, 6.0, 6.2, 5.9, 5.6, 5.5, 5.5],
-                           preventive="Sleep has been slightly below your usual range for 3 nights. Try dimming "
-                                      "cabin lights 30 minutes earlier tonight.")
-        s["indicators"][pid] = other
+    s["health"] = {pid: _health(pid, s) for pid in NAMES}
     s["summary"] = copy.deepcopy(SUMMARY)
     return s
+
+
+# ------------------------------------------------------------------ per-person data in the design's shape
+def _clock(t):
+    """NASA's form: day of the year, a slash, the time (GMT). 319/03:11:00"""
+    g = time.gmtime(t)
+    return f"{g.tm_yday}/{g.tm_hour:02d}:{g.tm_min:02d}:{g.tm_sec:02d}"
+
+
+def _trend(vals, nights=False):
+    """Direction and words from the last readings (the design sets these by hand until a rule is agreed)."""
+    v = [x[0] if isinstance(x, tuple) else x for x in vals if x is not None]
+    if len(v) < 4 or isinstance(v[-1], str):
+        return {"direction": "flat", "words": "Steady"}
+    up = all(v[-k] > v[-k - 1] for k in (1, 2, 3))
+    down = all(v[-k] < v[-k - 1] for k in (1, 2, 3))
+    if up:
+        return {"direction": "up", "words": "Rising for 3 " + ("nights" if nights else "days")}
+    if down:
+        return {"direction": "down", "words": ("Shorter for 3 nights" if nights else "Falling for 3 days")}
+    if v[-1] < v[-2] and not nights and abs(v[-1] - v[-2]) > 0.15 * abs(v[-2] or 1):
+        return {"direction": "down", "words": "Lower today"}
+    return {"direction": "flat", "words": "Steady"}
+
+
+def _health(pid, s):
+    now = s["now"]
+    today = time.gmtime(now).tm_yday
+    hhmmss = lambda t: time.strftime("%H:%M:%S", time.gmtime(t))
+    h = s["heart"]
+    s2 = pid == "lena" and h and h["stage"] not in ("cleared", "closed")
+    measures = {}
+    for mid, base in BASE.items():
+        m = copy.deepcopy({k: v for k, v in base.items() if k not in ("v", "time")})
+        m.update(copy.deepcopy({k: v for k, v in PERSON.get(pid, {}).get(mid, {}).items() if k != "v"}))
+        vals = list(PERSON.get(pid, {}).get(mid, {}).get("v", base["v"]))
+        if s2 and mid in S2_CAUTION:
+            vals = list(S2_CAUTION[mid])
+        if mid in ENTRY_TODAY:
+            vals[-1] = ENTRY_TODAY[mid] if s["checkins"][pid][mid] else None
+        if pid == "maya" and mid == "exercise":
+            vals[-1] = None                                     # wearable off: no reading today (missing)
+        m["source"] = "demo"
+        m["trend"] = _trend(vals, nights=mid == "sleep")
+        readings = []
+        for i, v in enumerate(vals):
+            r = {"day": today - 6 + i, "value": ({"systolic": v[0], "diastolic": v[1]} if isinstance(v, tuple) else v)}
+            if mid in SENSORS and mid not in ("exercise", "sleep"):
+                if i == 6:
+                    t = now - 120
+                    if pid == "maya" and mid in ("stShift", "heartRate"):
+                        t = max(now - 3 * 3600, now - (now % 86400) + 1)   # wearable off for 3 hours: stale
+                    r["time"] = base.get("time") if base.get("time") and base["time"] < hhmmss(now) else hhmmss(t)
+                else:
+                    r["time"] = base.get("time") or hhmmss(now - 120)
+            readings.append(r)
+        m["readings"] = readings
+        measures[mid] = m
+    data = {"clock": _clock(now), "person": {"name": NAMES[pid]}, "crewDoctor": {"name": "Sam", "pronoun": "He"},
+            "earthLink": {"station": "strong", "moon": "strong", "mars": "delayed"}[s["mode"]], "measures": measures,
+            "caution": None}
+    if s2 and h["stage"] in ("caution", "doctor_woken", "monitored", "confirmed"):
+        data["caution"] = {
+            "class": "Caution", "name": "Heart warning signs",
+            "raised": _clock(h["issued_at"]), "answerBy": _clock(h["issued_at"] + ANSWER_WINDOW_S),
+            "answered": ANSWER_WORD.get(h.get("quick_check")),
+            "answeredAt": _clock(h["answered_at"]) if h.get("answered_at") else None,
+            "seenAt": _clock(h["seen_at"]) if h.get("seen_at") else None,
+            "measures": CAUTION_MEASURES,
+            "reasons": "Wearable ECG changed from your usual pattern. Heart rate and blood pressure higher than your "
+                       "usual range.",
+            "checkIn": CHECK_IN,
+        }
+    return data

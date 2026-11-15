@@ -23,7 +23,7 @@ LIMITS = ("A wearable ECG (Bio-Monitor shirt or smartwatch) cannot confirm or ru
           "12-lead ECG, so the 12-lead Heart reading is the deciding measurement.")
 
 
-def assess(stage="screening", symptom=None):
+def assess(stage="screening", symptom=None, clot_test=False):
     """stage: "screening" (wearable only) or "confirming" (after the 12-lead Heart reading)."""
     qc = {"yes": "Yes", "unsure": "Not sure", "no": "No"}.get(symptom, "Not answered yet")
     criteria = [
@@ -33,9 +33,14 @@ def assess(stage="screening", symptom=None):
          "value": "68 bpm (usual 52 to 60)", "met": True, "basis": "norsk"},
         {"label": "Systolic blood pressure (supporting)",
          "value": "124 mmHg (usual 104 to 118)", "met": True, "basis": "norsk"},
-        {"label": "Chest discomfort, pressure or pain (quick check)", "value": qc,
+        {"label": "Chest discomfort, pressure or pain (check-in)", "value": qc,
          "met": True if symptom == "yes" else (False if symptom == "no" else None), "basis": "symptom"},
     ]
+    # ACTIS (CSA, Crew-13): portable D-dimer test, about 15 minutes. A blood clot in the lungs can also cause chest
+    # pain, so the crew doctor rules it out. It neither confirms nor rules out a heart attack. Result is MOCK.
+    criteria.append({"label": "Blood clot marker raised (ACTIS D-dimer test, supporting: rules out a clot)",
+                     "value": "Normal: blood clot unlikely (mock result)" if clot_test else "Not taken yet",
+                     "met": False if clot_test else None, "basis": "actis"})
     if stage == "confirming":
         criteria.append({"label": "12-lead ECG: new ST elevation of at least 1 mm in two contiguous leads",
                          "value": "1.6 mm in leads II, III and aVF", "met": True, "basis": "thygesen"})

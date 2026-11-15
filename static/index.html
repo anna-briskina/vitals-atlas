@@ -3,57 +3,75 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Crew Health</title>
+<title>Health</title>
+<!-- Fonts: local copies if `python tools/get_fonts.py` has been run (works offline), otherwise Google Fonts. -->
+<link rel="stylesheet" href="/static/fonts/fonts.css" onerror="this.remove()">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header class="topbar">
-  <div class="brand">
-    <h1>Crew Health</h1>
-    <p id="who-line">Demo crew · prototype</p>
-  </div>
-  <label class="as">Tablet of
-    <select id="as-select" aria-label="Whose tablet this is">
-      <option value="lena">Lena (flight engineer)</option>
-      <option value="sam">Sam (crew doctor)</option>
-      <option value="ravi">Ravi (backup crew medical officer)</option>
-      <option value="maya">Maya (commander)</option>
-    </select>
-  </label>
-  <nav class="tabs" id="tabs" aria-label="Views"></nav>
-  <div class="spacer"></div>
-  <div class="mission">
-    <div class="modes" role="group" aria-label="Mission setting">
-      <button type="button" data-mode="station">Space station</button>
-      <button type="button" data-mode="moon">Moon base</button>
-      <button type="button" data-mode="mars">Mars</button>
+
+<header>
+  <div class="bar neutral" id="bar">
+    <div class="common">
+      <span><span class="num" aria-hidden="true" id="clock"></span><span class="sr" id="clock-sr"></span></span>
+      <span class="link" id="link"></span>
     </div>
-    <div class="delay">Communications to Earth: <b id="delay">…</b></div>
+    <div class="mid" role="status" id="mid"></div>
+    <div class="help">
+      <button class="hb" type="button" id="get-doctor">Doctor</button>
+      <button class="hb sos" type="button" id="sos">SOS</button>
+    </div>
   </div>
-  <button type="button" class="btn-get" id="get-doctor">Get crew doctor</button>
-  <button type="button" class="btn-demo" id="demo-toggle" aria-expanded="false">Demo controls</button>
 </header>
 
-<section class="demo-drawer" id="demo" hidden aria-label="Demo controls">
-  <div class="demo-col">
+<main id="main"></main>
+
+<!-- The check-in panel (design file): not modal; the top bar ("Doctor", "SOS") stays live; main and nav are inert. -->
+<div class="scrim" aria-hidden="true"></div>
+<section class="panel" id="check" role="dialog" aria-modal="false" aria-labelledby="ci"></section>
+
+<nav aria-label="Main" id="nav"></nav>
+
+<section class="demo-drawer" id="demo" hidden aria-label="Demo controls (press D to close)">
+  <b>Demo controls · press D to close</b>
+  <div class="stack" style="gap:8px">
+    <b>Tablet of</b>
+    <select id="as-select" aria-label="Whose tablet this is">
+      <option value="lena">Lena, flight engineer</option>
+      <option value="sam">Sam, crew doctor</option>
+      <option value="ravi">Ravi, backup crew medical officer</option>
+      <option value="maya">Maya, commander</option>
+    </select>
+  </div>
+  <div class="stack" style="gap:8px">
+    <b>Mission setting</b>
+    <div class="seg" role="group" aria-label="Mission setting">
+      <button type="button" class="btn out sm" data-mode="station">Space station</button>
+      <button type="button" class="btn out sm" data-mode="moon">Moon base</button>
+      <button type="button" class="btn out sm" data-mode="mars">Mars</button>
+    </div>
+  </div>
+  <div class="stack" style="gap:8px">
     <b>Scenario S2: staged heart alert</b>
-    <button type="button" class="btn" data-act="demo_start_s2">Issue low-confidence heart result for Lena</button>
+    <button type="button" class="btn sm" data-act="demo_start_s2">Raise the heart caution for Lena</button>
   </div>
-  <div class="demo-col">
-    <b>Solar particle event replay</b>
-    <div id="spe-events" class="spe-events"></div>
+  <div class="stack" style="gap:8px">
+    <b>Solar particle event replay (DONKI)</b>
+    <div class="events" id="spe-events"></div>
   </div>
-  <div class="demo-col">
-    <b>Demo</b>
-    <button type="button" class="btn secondary" data-act="reset">Reset everything</button>
-    <small>Open this page in several windows with a different tablet selected to see the views stay in sync.</small>
+  <div class="stack" style="gap:8px">
+    <button type="button" class="btn out sm" data-act="reset">Reset everything</button>
+    <span>Open this page in several windows, one tablet each, to see the views stay in sync.</span>
   </div>
 </section>
 
-<main id="main" aria-live="polite"></main>
-
 <div id="cite-pop" class="cite-pop" role="dialog" aria-label="Source" hidden></div>
 <div id="modal" class="modal" hidden></div>
+<script src="/static/icons.js"></script>
+<script src="/static/health-cards.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>
